@@ -2,8 +2,8 @@ import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import productRoutes from './routes/productRoutes';
-import authRoutes from './routes/authRoutes';
+import productRoutes from './routes/productRoutes.js';
+import authRoutes from './routes/authRoutes.js';
 
 // Load environment variables
 dotenv.config();

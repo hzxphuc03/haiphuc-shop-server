@@ -1,13 +1,13 @@
 import { Router } from 'express';
-import { upload } from '../config/cloudinary';
-import { authAdmin } from '../middleware/auth';
+import { upload } from '../config/cloudinary.js';
+import { authAdmin } from '../middleware/auth.js';
 import { 
   getProducts, 
   getProductById,
   createProduct, 
   updateProduct, 
   deleteProduct 
-} from '../controllers/productController';
+} from '../controllers/productController.js';
 
 const router = Router();
 

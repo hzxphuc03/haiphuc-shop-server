@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import Product from '../models/Product';
+import Product from '../models/Product.js';
 
 /**
  * Lấy danh sách sản phẩm (Hỗ trợ lọc theo Category)
