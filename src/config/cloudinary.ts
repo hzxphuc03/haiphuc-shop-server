@@ -18,7 +18,7 @@ const storage = new CloudinaryStorage({
   params: async (req, file) => {
     return {
       folder: 'haiphuc-shop-products', // Tên thư mục trên Cloudinary
-      allowed_formats: ['jpg', 'png', 'jpeg', 'webp'],
+      allowed_formats: ['jpg', 'png', 'jpeg', 'webp', 'avif'],
       public_id: `product-${Date.now()}`, // Tên file duy nhất
     };
   },

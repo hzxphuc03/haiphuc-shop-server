@@ -1,5 +1,10 @@
 import mongoose, { Schema, type Document } from 'mongoose';
 
+export interface IProductImage {
+  url: string;
+  color: string; // 'All' hoặc tên màu cụ thể (Black, White...)
+}
+
 export interface IProduct extends Document {
   name: string;
   description: string;
@@ -7,8 +12,9 @@ export interface IProduct extends Document {
   category: 'Giày' | 'Quần' | 'Áo' | 'Phụ kiện' | 'Bộ đồ';
   sizes: string[];
   colors: string[];
-  images: string[];
+  images: IProductImage[];
   stock: number;
+  type: 'READY' | 'ORDER';
   createdAt: Date;
   updatedAt: Date;
 }
@@ -24,19 +30,39 @@ const ProductSchema: Schema = new Schema(
       enum: ['Giày', 'Quần', 'Áo', 'Phụ kiện', 'Bộ đồ'],
       default: 'Áo'
     },
-    sizes: { type: [String], default: [] },
-    colors: { type: [String], default: [] },
-    images: { 
+    sizes: { 
       type: [String], 
       validate: {
         validator: function(v: string[]) {
-          return v && v.length >= 1 && v.length <= 6;
+          return v && v.length > 0;
         },
-        message: 'Sản phẩm phải có ít nhất 1 ảnh và tối đa 6 ảnh.'
+        message: 'Sản phẩm phải có ít nhất một size.'
       },
+      required: [true, 'Vui lòng nhập ít nhất một size']
+    },
+    colors: { 
+      type: [String], 
+      validate: {
+        validator: function(v: string[]) {
+          return v && v.length > 0;
+        },
+        message: 'Sản phẩm phải có ít nhất một màu sắc.'
+      },
+      required: [true, 'Vui lòng nhập ít nhất một màu sắc']
+    },
+    images: [
+      {
+        url: { type: String, required: true },
+        color: { type: String, default: 'All' }
+      }
+    ],
+    stock: { type: Number, default: 0, min: 0 },
+    type: { 
+      type: String, 
+      enum: ['READY', 'ORDER'], 
+      default: 'READY',
       required: true
     },
-    stock: { type: Number, default: 0, min: 0 },
   },
   { 
     timestamps: true,
