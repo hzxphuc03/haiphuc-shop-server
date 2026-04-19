@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
-import Order, { calculateOrderAmount } from '../models/Order';
-import { sendOrderEmail, sendAdminOrderNotification } from '../utils/email';
+import Order, { calculateOrderAmount } from '../models/Order.js';
+import { sendOrderEmail, sendAdminOrderNotification } from '../utils/email.js';
 
 export const createOrder = async (req: Request, res: Response) => {
   try {
