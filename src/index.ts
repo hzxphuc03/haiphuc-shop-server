@@ -12,7 +12,21 @@ const app = express();
 const PORT = process.env.PORT || 5005;
 
 // Middleware
-app.use(cors());
+const allowedOrigins = [
+  'http://localhost:4200', 
+  'https://haiphuc-shop.vercel.app' // Thay thế bằng link Vercel thực tế của đại ca sau này
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error('Chừa cái thói truy cập trái phép nha! (CORS)'));
+    }
+  },
+  credentials: true
+}));
 app.use(express.json());
 
 // Routes
