@@ -15,6 +15,7 @@ export interface IProduct extends Document {
   images: IProductImage[];
   stock: number;
   type: 'READY' | 'ORDER';
+  isSale: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -63,6 +64,7 @@ const ProductSchema: Schema = new Schema(
       default: 'READY',
       required: true
     },
+    isSale: { type: Boolean, default: false }
   },
   { 
     timestamps: true,

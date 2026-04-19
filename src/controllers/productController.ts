@@ -6,14 +6,24 @@ import Product from '../models/Product.js';
  */
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { category, search, page = 1, limit = 10 } = req.query;
+    const { category, type, isSale, search, page = 1, limit = 10 } = req.query;
     
     // 1. Xây dựng bộ lọc (Filter)
     const filter: any = {};
     
     // Lọc theo Category
-    if (category && typeof category === 'string') {
+    if (category && typeof category === 'string' && category !== 'Tất cả') {
       filter.category = category;
+    }
+
+    // Lọc theo Type (READY / ORDER)
+    if (type && typeof type === 'string' && type !== 'Tất cả') {
+      filter.type = type;
+    }
+
+    // Lọc theo isSale
+    if (isSale === 'true') {
+      filter.isSale = true;
     }
     
     // Lọc theo Search (Regex name hoặc description)
