@@ -56,11 +56,28 @@ export const createOrder = async (req: Request, res: Response) => {
 
 export const getMyOrders = async (req: Request, res: Response) => {
     try {
-        const { user } = req.query;
+        const { user, page = 1, limit = 10 } = req.query;
         if (!user) return res.status(400).json({ message: 'User identifier is required' });
         
-        const orders = await Order.find({ user: user as string }).sort({ createdAt: -1 }).populate('items.product');
-        res.json(orders);
+        const currentPage = Number(page);
+        const itemsPerPage = Number(limit);
+        const skip = (currentPage - 1) * itemsPerPage;
+
+        const [orders, totalItems] = await Promise.all([
+          Order.find({ user: user as string })
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(itemsPerPage)
+            .populate('items.product'),
+          Order.countDocuments({ user: user as string })
+        ]);
+
+        res.json({
+          data: orders,
+          totalItems,
+          totalPages: Math.ceil(totalItems / itemsPerPage),
+          currentPage
+        });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }
@@ -68,8 +85,42 @@ export const getMyOrders = async (req: Request, res: Response) => {
 
 export const getAllOrders = async (req: Request, res: Response) => {
     try {
-        const orders = await Order.find().sort({ createdAt: -1 }).populate('items.product');
-        res.json(orders);
+        const { search, status, page = 1, limit = 10 } = req.query;
+        
+        const filter: any = {};
+        
+        // Lọc theo trạng thái đơn hàng
+        if (status && status !== 'ALL') {
+          filter.paymentStatus = status;
+        }
+
+        // Tìm kiếm theo tên hoặc SĐT
+        if (search && typeof search === 'string') {
+          filter.$or = [
+            { fullName: { $regex: search, $options: 'i' } },
+            { phoneNumber: { $regex: search, $options: 'i' } }
+          ];
+        }
+
+        const currentPage = Number(page);
+        const itemsPerPage = Number(limit);
+        const skip = (currentPage - 1) * itemsPerPage;
+
+        const [orders, totalItems] = await Promise.all([
+          Order.find(filter)
+            .sort({ createdAt: -1 })
+            .skip(skip)
+            .limit(itemsPerPage)
+            .populate('items.product'),
+          Order.countDocuments(filter)
+        ]);
+
+        res.json({
+          data: orders,
+          totalItems,
+          totalPages: Math.ceil(totalItems / itemsPerPage),
+          currentPage
+        });
     } catch (error: any) {
         res.status(500).json({ message: error.message });
     }

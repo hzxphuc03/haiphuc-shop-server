@@ -2,17 +2,50 @@ import type { Request, Response } from 'express';
 import Product from '../models/Product.js';
 
 /**
- * Lấy danh sách sản phẩm (Hỗ trợ lọc theo Category)
+ * Lấy danh sách sản phẩm (Hỗ trợ Search, Phân trang, lọc Category)
  */
 export const getProducts = async (req: Request, res: Response): Promise<void> => {
   try {
-    const { category } = req.query;
+    const { category, search, page = 1, limit = 10 } = req.query;
     
-    // Đảm bảo category là một chuỗi trước khi lọc
-    const filter = typeof category === 'string' ? { category } : {};
+    // 1. Xây dựng bộ lọc (Filter)
+    const filter: any = {};
     
-    const products = await Product.find(filter).sort({ createdAt: -1 });
-    res.status(200).json(products);
+    // Lọc theo Category
+    if (category && typeof category === 'string') {
+      filter.category = category;
+    }
+    
+    // Lọc theo Search (Regex name hoặc description)
+    if (search && typeof search === 'string') {
+      filter.$or = [
+        { name: { $regex: search, $options: 'i' } },
+        { description: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    // 2. Phân trang logic
+    const currentPage = Number(page);
+    const itemsPerPage = Number(limit);
+    const skip = (currentPage - 1) * itemsPerPage;
+
+    // 3. Thực thi query song song
+    const [products, totalItems] = await Promise.all([
+      Product.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(itemsPerPage),
+      Product.countDocuments(filter)
+    ]);
+
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+    res.status(200).json({
+      data: products,
+      totalItems,
+      totalPages,
+      currentPage
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
