@@ -17,10 +17,11 @@ export const authAdmin = (req: Request, res: Response, next: NextFunction): void
   const token = authHeader.split(' ')[1];
 
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
+    const decoded = jwt.verify(token as string, JWT_SECRET as string);
     (req as any).admin = decoded;
     next();
   } catch (error) {
     res.status(401).json({ error: 'Token không hợp lệ hoặc đã hết hạn.' });
+    return;
   }
 };
