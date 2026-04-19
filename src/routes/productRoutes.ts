@@ -1,7 +1,9 @@
 import { Router } from 'express';
 import { upload } from '../config/cloudinary';
+import { authAdmin } from '../middleware/auth';
 import { 
   getProducts, 
+  getProductById,
   createProduct, 
   updateProduct, 
   deleteProduct 
@@ -9,16 +11,15 @@ import {
 
 const router = Router();
 
-// GET: Lấy danh sách sản phẩm
+// GET: Lấy danh sách sản phẩm (Công khai)
 router.get('/', getProducts);
 
-// POST: Thêm sản phẩm mới (Có xử lý upload ảnh)
-router.post('/', upload.single('image'), createProduct);
+// GET: Lấy chi tiết một sản phẩm (Công khai)
+router.get('/:id', getProductById);
 
-// PUT: Cập nhật sản phẩm theo ID
-router.put('/:id', updateProduct);
-
-// DELETE: Xóa sản phẩm theo ID
-router.delete('/:id', deleteProduct);
+// Các route bên dưới yêu cầu quyền Admin (Cần Token)
+router.post('/', authAdmin, upload.array('images', 6), createProduct);
+router.put('/:id', authAdmin, upload.array('images', 6), updateProduct);
+router.delete('/:id', authAdmin, deleteProduct);
 
 export default router;

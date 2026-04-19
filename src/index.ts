@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import productRoutes from './routes/productRoutes';
+import authRoutes from './routes/authRoutes';
 
 // Load environment variables
 dotenv.config();
@@ -16,6 +17,7 @@ app.use(express.json());
 
 // Routes
 app.use('/api/products', productRoutes);
+app.use('/api/auth', authRoutes);
 
 // Health check
 app.get('/', (req, res) => {
