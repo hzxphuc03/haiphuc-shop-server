@@ -1,5 +1,5 @@
 import mongoose, { Schema, type Document } from 'mongoose';
-import { sendOrderEmail } from '../utils/email';
+import { sendOrderEmail } from '../utils/email.js';
 
 export interface IOrderItem {
   product: mongoose.Types.ObjectId;
