@@ -82,7 +82,7 @@ OrderSchema.post('save', async function(doc) {
  */
 export const calculateOrderAmount = (
   items: { price: number; quantity: number; type: 'READY' | 'ORDER' }[],
-  orderDepositRate: 0.7 | 1 = 0.7
+  orderDepositRate: number = 0.7
 ) => {
   let totalAmount = 0;
   let depositAmount = 0;
@@ -90,17 +90,11 @@ export const calculateOrderAmount = (
   items.forEach(item => {
     const itemTotal = item.price * item.quantity;
     totalAmount += itemTotal;
-
-    if (item.type === 'READY') {
-      // Hàng sẵn cọc 100%
-      depositAmount += itemTotal;
-    } else {
-      // Hàng order cọc tùy chọn (70% hoặc 100%)
-      depositAmount += itemTotal * orderDepositRate;
-    }
+    // Áp dụng tỷ lệ cọc chung cho toàn bộ đơn hàng dựa theo lựa chọn của khách
+    depositAmount += itemTotal * orderDepositRate;
   });
 
-  return { totalAmount, depositAmount };
+  return { totalAmount, depositAmount: Math.round(depositAmount) };
 };
 
 export default mongoose.model<IOrder>('Order', OrderSchema);
