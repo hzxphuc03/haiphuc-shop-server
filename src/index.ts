@@ -14,12 +14,15 @@ const PORT = process.env.PORT || 5005;
 // Middleware
 const allowedOrigins = [
   'http://localhost:4200', 
-  'https://haiphuc-shop.vercel.app' // Thay thế bằng link Vercel thực tế của đại ca sau này
+  'https://haiphuc-shop.vercel.app'
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || allowedOrigins.includes(origin)) {
+    // Cho phép nếu không có origin (như curl hoặc server-to-server)
+    // Hoặc nếu nó nằm trong danh sách fix cứng
+    // Hoặc nếu nó là subdomain của Vercel (.vercel.app)
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true);
     } else {
       callback(new Error('Chừa cái thói truy cập trái phép nha! (CORS)'));
