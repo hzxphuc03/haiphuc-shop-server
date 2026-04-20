@@ -1,6 +1,6 @@
 import type { Request, Response } from 'express';
 import Order, { calculateOrderAmount } from '../models/Order.js';
-import { sendOrderEmail, sendAdminOrderNotification } from '../utils/email.js';
+import { sendOrderEmail, sendAdminOrderNotification, sendOrderReceivedEmail } from '../utils/email.js';
 
 export const createOrder = async (req: Request, res: Response) => {
   try {
@@ -40,9 +40,14 @@ export const createOrder = async (req: Request, res: Response) => {
 
     await newOrder.save();
 
-    // 🔔 GỬI THÔNG BÁO CHO ADMIN NGAY LẬP TỨC
+    // 🔔 GỬI THÔNG BÁO NGAY LẬP TỨC
     const populatedOrder = await newOrder.populate('items.product');
-    sendAdminOrderNotification(populatedOrder); // Chạy ngầm
+    
+    // Báo cho Admin
+    sendAdminOrderNotification(populatedOrder); 
+    
+    // Báo cho Khách (Xác nhận đã nhận đơn)
+    sendOrderReceivedEmail(populatedOrder); 
 
     res.status(201).json({
       message: 'Đặt đơn thành công! Vui lòng chờ đại ca xác nhận tiền cọc.',
