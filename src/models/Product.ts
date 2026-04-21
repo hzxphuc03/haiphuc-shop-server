@@ -33,23 +33,11 @@ const ProductSchema: Schema = new Schema(
     },
     sizes: { 
       type: [String], 
-      validate: {
-        validator: function(v: string[]) {
-          return v && v.length > 0;
-        },
-        message: 'Sản phẩm phải có ít nhất một size.'
-      },
-      required: [true, 'Vui lòng nhập ít nhất một size']
+      default: []
     },
     colors: { 
       type: [String], 
-      validate: {
-        validator: function(v: string[]) {
-          return v && v.length > 0;
-        },
-        message: 'Sản phẩm phải có ít nhất một màu sắc.'
-      },
-      required: [true, 'Vui lòng nhập ít nhất một màu sắc']
+      default: []
     },
     images: [
       {
