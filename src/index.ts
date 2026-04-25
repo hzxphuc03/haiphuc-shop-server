@@ -7,6 +7,7 @@ import orderRoutes from './routes/orderRoutes.js';
 import { config } from './config/index.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
+import cookieParser from 'cookie-parser';
 
 const app = express();
 
@@ -14,17 +15,25 @@ const app = express();
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Middleware
+app.use(cookieParser());
+const allowedOrigins = [
+  'http://localhost:4200', 
+  'http://localhost:5005', 
+  'https://haiphuc-shop.vercel.app',
+  'https://haiphuc-shop-git-main-phuc-hais-projects.vercel.app'
+];
+
 app.use(cors({
   origin: (origin, callback) => {
-    // Cho phép nếu không có origin (như curl hoặc server-to-server)
-    // Hoặc nếu nó nằm trong danh sách fix cứng hoặc subdomain của Vercel
-    if (!origin || config.cors.allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true);
     } else {
       callback(new Error('Chừa cái thói truy cập trái phép nha! (CORS)'));
     }
   },
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(express.json());
 
@@ -36,6 +45,25 @@ app.use('/api/orders', orderRoutes);
 // Health check
 app.get('/', (req, res) => {
   res.send('Haiphuc Shop API is running...');
+});
+
+// 404 Handler
+app.use((req, res) => {
+  res.status(404).json({ 
+    success: false, 
+    message: `Endpoint [${req.method}] ${req.url} không tồn tại trên hệ thống.` 
+  });
+});
+
+// Global Error Handler
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('💥 [Server Error]:', err.message);
+  
+  res.status(err.status || 500).json({
+    success: false,
+    message: err.message || 'Lỗi máy chủ nội bộ.',
+    error: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
 });
 
 // MongoDB connection

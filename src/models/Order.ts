@@ -8,6 +8,7 @@ export interface IOrderItem {
   type: 'READY' | 'ORDER';
   size?: string;
   color?: string;
+  imageUrl?: string;
 }
 
 export interface IOrder extends Document {
@@ -40,7 +41,8 @@ const OrderSchema: Schema = new Schema(
         price: { type: Number, required: true },
         type: { type: String, enum: ['READY', 'ORDER'], required: true },
         size: { type: String },
-        color: { type: String }
+        color: { type: String },
+        imageUrl: { type: String }
       }
     ],
     totalAmount: { type: Number, required: true, min: 0 },

@@ -57,8 +57,10 @@ export const sendAdminOrderNotification = async (order: any) => {
             <tbody>
               ${items.map((i: any) => `
                 <tr style="border-bottom: 1px solid #ddd;">
-                  <td style="padding: 10px;">
+                   <td style="padding: 10px;">
                     <div style="display: flex; align-items: center;">
+                       <img src="${i.imageUrl || (i.product?.images && i.product.images[0]?.url) || 'https://placehold.co/50x50'}" 
+                            style="width: 50px; height: 50px; object-cover: cover; margin-right: 10px; border: 1px solid #eee;">
                        <span>${i.product?.name || 'Sản phẩm'}</span>
                     </div>
                   </td>
@@ -104,7 +106,13 @@ export const sendOrderReceivedEmail = async (order: any) => {
     // Tạo danh sách món đồ
     const itemRows = items.map((i: any) => `
       <tr style="border-bottom: 1px solid #eee;">
-        <td style="padding: 10px;">${i.product?.name || 'Sản phẩm'}</td>
+        <td style="padding: 10px;">
+          <div style="display: flex; align-items: center;">
+            <img src="${i.imageUrl || (i.product?.images && i.product.images[0]?.url) || 'https://placehold.co/40x40'}" 
+                 style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px; border: 1px solid #eee;">
+            <span>${i.product?.name || 'Sản phẩm'}</span>
+          </div>
+        </td>
         <td style="padding: 10px; text-align: center;">${i.size || 'N/A'} / ${i.color || 'N/A'}</td>
         <td style="padding: 10px; text-align: center;">x${i.quantity}</td>
         <td style="padding: 10px; text-align: right;">${i.price.toLocaleString()}đ</td>
@@ -181,7 +189,13 @@ export const sendOrderEmail = async (order: any) => {
 
     const itemRows = items.map((item: any) => `
       <tr style="border-bottom: 1px solid #eee;">
-        <td style="padding: 10px;">${item.product?.name || 'Sản phẩm'}</td>
+        <td style="padding: 10px;">
+          <div style="display: flex; align-items: center;">
+            <img src="${item.imageUrl || (item.product?.images && item.product.images[0]?.url) || 'https://placehold.co/40x40'}" 
+                 style="width: 40px; height: 40px; object-fit: cover; margin-right: 10px; border: 1px solid #eee;">
+            <span>${item.product?.name || 'Sản phẩm'}</span>
+          </div>
+        </td>
         <td style="padding: 10px; text-align: center;">${item.size || 'N/A'} / ${item.color || 'N/A'}</td>
         <td style="padding: 10px; text-align: center;">x${item.quantity}</td>
         <td style="padding: 10px; text-align: right;">${item.price.toLocaleString()}đ</td>

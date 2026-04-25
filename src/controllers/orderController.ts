@@ -17,7 +17,8 @@ export const createOrder = async (req: Request, res: Response) => {
       price: item.priceVND,
       type: item.type,
       size: item.selectedSize || item.size,
-      color: item.selectedColor || item.color
+      color: item.selectedColor || item.color,
+      imageUrl: item.displayImage || (item.images && item.images[0]?.url)
     }));
 
     // 2. Calculate amounts based on selected rate

@@ -5,68 +5,56 @@ import axios from 'axios';
 import User, { type IUser } from '../models/User.js';
 import { config } from '../config/index.js';
 import { loginSchema, registerSchema } from '../schemas/auth.schema.js';
+import type { AuthRequest } from '../middleware/auth.js';
 
 const googleClient = new OAuth2Client(config.google.clientId);
+
+/**
+ * Cấu hình Cookie chuẩn Senior Architect
+ */
+const cookieOptions = {
+  httpOnly: true,
+  secure: config.nodeEnv === 'production', // Chỉ bật secure (HTTPS) khi ở production
+  sameSite: (config.nodeEnv === 'production' ? 'none' : 'lax') as any, // 'lax' cho dev, 'none' cho production cross-domain
+  path: '/',
+  maxAge: 7 * 24 * 60 * 60 * 1000 // 7 ngày
+};
 
 /**
  * Tạo bộ đôi Access Token và Refresh Token
  */
 const generateTokens = (user: IUser) => {
   const accessToken = jwt.sign(
-    { id: user._id, role: user.role },
+    { id: user._id, role: user.role, username: user.username },
     config.jwtSecret,
-    { expiresIn: config.jwtExpiresIn as any }
+    { expiresIn: '15m' } // Access Token ngắn hạn
   );
 
   const refreshToken = jwt.sign(
     { id: user._id },
     config.jwtRefreshSecret,
-    { expiresIn: config.jwtRefreshExpiresIn as any }
+    { expiresIn: '7d' } // Refresh Token dài hạn
   );
 
   return { accessToken, refreshToken };
 };
 
 /**
- * @swagger
- * /api/auth/register:
- *   post:
- *     summary: Đăng ký người dùng mới
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [username, password, email, fullName]
- *             properties:
- *               username: { type: string }
- *               password: { type: string }
- *               email: { type: string }
- *               fullName: { type: string }
- *     responses:
- *       201:
- *         description: Đăng ký thành công
- *       400:
- *         description: Dữ liệu không hợp lệ
+ * Đăng ký tài khoản
  */
 export const register = async (req: Request, res: Response) => {
   try {
     const validatedData = registerSchema.parse(req.body);
-
     const existingUser = await User.findOne({ 
       $or: [{ email: validatedData.email }, { username: validatedData.username }] 
     });
 
-    if (existingUser) {
-      return res.status(400).json({ message: 'Email hoặc tên đăng nhập đã tồn tại' });
-    }
+    if (existingUser) return res.status(400).json({ message: 'Email hoặc tên đăng nhập đã tồn tại' });
 
     const newUser = await User.create({
       username: validatedData.username,
-      password: validatedData.password,
       email: validatedData.email,
+      password: validatedData.password,
       fullName: validatedData.fullName,
       avatar: validatedData.avatar || '',
       provider: 'local',
@@ -77,51 +65,30 @@ export const register = async (req: Request, res: Response) => {
     newUser.refreshToken = refreshToken;
     await newUser.save();
 
+    res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, cookieOptions);
+
     return res.status(201).json({
       user: {
         id: newUser._id,
         username: newUser.username,
         email: newUser.email,
-        fullName: newUser.fullName,
-        role: newUser.role,
-        avatar: newUser.avatar
-      },
-      accessToken,
-      refreshToken
+        role: newUser.role
+      }
     });
   } catch (error: any) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ errors: error.errors });
-    }
     return res.status(500).json({ message: 'Lỗi server khi đăng ký' });
   }
 };
 
 /**
- * @swagger
- * /api/auth/login:
- *   post:
- *     summary: Đăng nhập truyền thống
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [username, password]
- *             properties:
- *               username: { type: string }
- *               password: { type: string }
- *     responses:
- *       200:
- *         description: Đăng nhập thành công
+ * Đăng nhập truyền thống
  */
 export const login = async (req: Request, res: Response) => {
   try {
     const { username, password } = loginSchema.parse(req.body);
-
     const user = await User.findOne({ username });
+
     if (!user || !(await user.comparePassword(password))) {
       return res.status(401).json({ message: 'Thông tin đăng nhập không chính xác' });
     }
@@ -130,174 +97,164 @@ export const login = async (req: Request, res: Response) => {
     user.refreshToken = refreshToken;
     await user.save();
 
+    res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, cookieOptions);
+
     return res.json({
       user: {
         id: user._id,
         username: user.username,
         email: user.email,
-        fullName: user.fullName,
-        role: user.role,
-        avatar: user.avatar
-      },
-      accessToken,
-      refreshToken
+        role: user.role
+      }
     });
   } catch (error: any) {
-    if (error.name === 'ZodError') {
-      return res.status(400).json({ errors: error.errors });
-    }
     return res.status(500).json({ message: 'Lỗi server khi đăng nhập' });
   }
 };
 
 /**
- * @swagger
- * /api/auth/google:
- *   post:
- *     summary: Đăng nhập bằng Google
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [idToken]
- *             properties:
- *               idToken: { type: string }
- *     responses:
- *       200:
- *         description: Đăng nhập Google thành công
+ * Lấy thông tin cá nhân (Check Auth)
+ */
+export const getMe = async (req: AuthRequest, res: Response) => {
+  try {
+    const user = await User.findById(req.user?.id).select('-password -refreshToken');
+    if (!user) return res.status(404).json({ message: 'Không tìm thấy người dùng' });
+    return res.json(user);
+  } catch (error) {
+    return res.status(500).json({ message: 'Lỗi server' });
+  }
+};
+
+/**
+ * Refresh Token Rotation Logic
+ */
+export const refreshToken = async (req: Request, res: Response) => {
+  const token = req.cookies?.refreshToken;
+  if (!token) return res.status(401).json({ message: 'Không có Refresh Token' });
+
+  try {
+    const decoded = jwt.verify(token, config.jwtRefreshSecret) as any;
+    const user = await User.findById(decoded.id);
+
+    // Phát hiện tấn công: Refresh Token không khớp với bản ghi trong DB (đã bị dùng hoặc bị đánh cắp)
+    if (!user || user.refreshToken !== token) {
+      if (user) {
+        user.refreshToken = ''; // Vô hiệu hóa mọi phiên làm việc
+        await user.save();
+      }
+      res.clearCookie('accessToken');
+      res.clearCookie('refreshToken');
+      return res.status(403).json({ message: 'Phát hiện truy cập trái phép. Đã vô hiệu hóa phiên làm việc.' });
+    }
+
+    // Cấp cặp Token mới (Rotation)
+    const tokens = generateTokens(user);
+    user.refreshToken = tokens.refreshToken;
+    await user.save();
+
+    res.cookie('accessToken', tokens.accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+    res.cookie('refreshToken', tokens.refreshToken, cookieOptions);
+
+    return res.json({ success: true });
+  } catch (error) {
+    return res.status(403).json({ message: 'Refresh Token không hợp lệ hoặc đã hết hạn' });
+  }
+};
+
+/**
+ * Đăng xuất
+ */
+export const logout = async (req: AuthRequest, res: Response) => {
+  if (req.user) {
+    await User.findByIdAndUpdate(req.user.id, { refreshToken: '' });
+  }
+  res.clearCookie('accessToken');
+  res.clearCookie('refreshToken');
+  return res.json({ message: 'Đăng xuất thành công' });
+};
+
+/**
+ * Google Login (Tương tự)
  */
 export const googleLogin = async (req: Request, res: Response) => {
   const { idToken } = req.body;
-
   try {
-    console.log('--- DEBUG GOOGLE LOGIN ---');
-    console.log('ID Token received:', idToken ? (idToken.substring(0, 20) + '...') : 'MISSING');
-    console.log('Expected Client ID (Config):', config.google.clientId);
-    
     const ticket = await googleClient.verifyIdToken({
       idToken,
       audience: config.google.clientId as string,
     });
-
     const payload = ticket.getPayload() as TokenPayload;
-    console.log('Google Payload Success:', payload?.email);
-    
-    if (!payload) return res.status(400).json({ message: 'Google Token không hợp lệ' });
+    if (!payload || !payload.email) return res.status(400).json({ message: 'Google Token không hợp lệ' });
 
-    const { sub, email, name, picture } = payload;
-
-    if (!email) return res.status(400).json({ message: 'Google account không cung cấp email' });
-
-    let user = await User.findOne({ email: email as string }) as (IUser | null);
-
+    let user = await User.findOne({ email: payload.email }) as IUser;
     if (user) {
-      user.socialId = sub;
+      user.socialId = payload.sub;
       user.provider = 'google';
-      if (!user.avatar) user.avatar = picture || '';
-      await user.save();
     } else {
       user = await User.create({
-        email: email as string,
-        fullName: name || 'Google User',
-        avatar: picture || '',
-        socialId: sub,
+        email: payload.email,
+        fullName: payload.name || 'Google User',
+        avatar: payload.picture || '',
+        socialId: payload.sub,
         provider: 'google',
         role: 'user'
       }) as IUser;
     }
 
-    const { accessToken, refreshToken } = generateTokens(user!);
-    user!.refreshToken = refreshToken;
-    await user!.save();
+    const { accessToken, refreshToken } = generateTokens(user);
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, cookieOptions);
 
     return res.json({
-      user: {
-        id: user!._id,
-        email: user!.email,
-        fullName: user!.fullName,
-        role: user!.role,
-        avatar: user!.avatar
-      },
-      accessToken,
-      refreshToken
+      user: { id: user._id, email: user.email, fullName: user.fullName, role: user.role }
     });
   } catch (error) {
-    console.error('Google Auth Error:', error);
     return res.status(500).json({ message: 'Xác thực Google thất bại' });
   }
 };
 
 /**
- * @swagger
- * /api/auth/facebook:
- *   post:
- *     summary: Đăng nhập bằng Facebook
- *     tags: [Auth]
- *     requestBody:
- *       required: true
- *       content:
- *         application/json:
- *           schema:
- *             type: object
- *             required: [accessToken]
- *             properties:
- *               accessToken: { type: string }
- *     responses:
- *       200:
- *         description: Đăng nhập Facebook thành công
+ * Facebook Login (Tương tự)
  */
 export const facebookLogin = async (req: Request, res: Response) => {
   const { accessToken: fbAccessToken } = req.body;
-
   try {
     const { data } = await axios.get(
       `https://graph.facebook.com/me?fields=id,name,email,picture.type(large)&access_token=${fbAccessToken}`
     );
-
     const { id, name, email, picture } = data;
-
-    if (!email && !id) return res.status(400).json({ message: 'Facebook không trả về thông tin định danh' });
-
     const targetEmail = email || `${id}@facebook.com`;
 
-    let user = await User.findOne({ email: targetEmail }) as (IUser | null);
-
+    let user = await User.findOne({ email: targetEmail }) as IUser;
     if (user) {
-      user.socialId = id as string;
+      user.socialId = id;
       user.provider = 'facebook';
-      if (!user.avatar) user.avatar = picture?.data?.url || '';
-      await user.save();
     } else {
       user = await User.create({
         email: targetEmail,
         fullName: name || 'Facebook User',
         avatar: picture?.data?.url || '',
-        socialId: id as string,
+        socialId: id,
         provider: 'facebook',
         role: 'user'
       }) as IUser;
     }
 
-    const { accessToken, refreshToken } = generateTokens(user!);
-    user!.refreshToken = refreshToken;
-    await user!.save();
+    const { accessToken, refreshToken } = generateTokens(user);
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    res.cookie('accessToken', accessToken, { ...cookieOptions, maxAge: 15 * 60 * 1000 });
+    res.cookie('refreshToken', refreshToken, cookieOptions);
 
     return res.json({
-      user: {
-        id: user!._id,
-        email: user!.email,
-        fullName: user!.fullName,
-        role: user!.role,
-        avatar: user!.avatar
-      },
-      accessToken,
-      refreshToken
+      user: { id: user._id, email: user.email, fullName: user.fullName, role: user.role }
     });
   } catch (error) {
-    console.error('Facebook Auth Error:', error);
     return res.status(500).json({ message: 'Xác thực Facebook thất bại' });
   }
 };

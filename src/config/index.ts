@@ -7,6 +7,7 @@ dotenv.config();
  */
 export const config = {
   port: process.env.PORT || 5005,
+  nodeEnv: process.env.NODE_ENV || 'development',
   mongodbUri: process.env.MONGODB_URI || 'mongodb://localhost:27017/haiphuc-shop',
   jwtSecret: process.env.JWT_SECRET || 'haiphuc-shop-super-secret-key',
   jwtRefreshSecret: process.env.JWT_REFRESH_SECRET || 'haiphuc-shop-refresh-secret-key',

@@ -6,24 +6,22 @@ export interface AuthRequest extends Request {
   user?: {
     id: string;
     role: string;
+    username: string;
   };
 }
 
 /**
- * Middleware xác thực Token (Dùng chung cho cả User & Admin)
+ * Middleware xác thực Token (Hỗ trợ cả Header và Cookie)
  */
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  const authHeader = req.headers.authorization;
+  // Debug log để check Cookie (Xóa khi lên prod)
+  console.log('🍪 [Auth Middleware] Cookies received:', req.cookies);
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    res.status(401).json({ error: 'Vui lòng đăng nhập để tiếp tục.' });
-    return;
-  }
-
-  const token = authHeader.split(' ')[1];
+  // 1. Lấy token từ Cookie hoặc Authorization Header
+  const token = req.cookies?.accessToken || req.headers.authorization?.split(' ')[1];
 
   if (!token) {
-    res.status(401).json({ error: 'Token không hợp lệ.' });
+    res.status(401).json({ error: 'Truy cập bị từ chối. Vui lòng đăng nhập.' });
     return;
   }
 
@@ -31,18 +29,38 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
     const decoded = jwt.verify(token, config.jwtSecret) as any;
     req.user = decoded;
     next();
-  } catch (error) {
-    res.status(401).json({ error: 'Phiên làm việc hết hạn. Vui lòng đăng nhập lại.' });
+  } catch (error: any) {
+    if (error.name === 'TokenExpiredError') {
+      res.status(401).json({ error: 'Token đã hết hạn.', code: 'TOKEN_EXPIRED' });
+    } else {
+      res.status(401).json({ error: 'Token không hợp lệ.' });
+    }
   }
 };
 
 /**
- * Middleware kiểm tra quyền Admin
+ * Middleware phân quyền linh hoạt (Role-based)
+ * @param roles Mảng các role được phép truy cập (e.g. ['admin', 'member'])
  */
-export const isAdmin = (req: AuthRequest, res: Response, next: NextFunction): void => {
-  if (req.user && req.user.role === 'admin') {
+export const checkRole = (roles: string[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ error: 'Yêu cầu xác thực tài khoản.' });
+      return;
+    }
+
+    if (!roles.includes(req.user.role)) {
+      res.status(403).json({ 
+        error: `Quyền truy cập bị từ chối. Cần quyền: [${roles.join(', ')}]` 
+      });
+      return;
+    }
+
     next();
-  } else {
-    res.status(403).json({ error: 'Bạn không có quyền truy cập khu vực này.' });
-  }
+  };
 };
+
+/**
+ * Middleware cũ (Duy trì tính tương thích)
+ */
+export const isAdmin = checkRole(['admin']);
