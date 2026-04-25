@@ -11,6 +11,9 @@ import cookieParser from 'cookie-parser';
 
 const app = express();
 
+// Render/Cloud Proxy Trust
+app.set('trust proxy', 1);
+
 // Swagger
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
