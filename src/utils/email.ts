@@ -17,43 +17,67 @@ export const sendAdminOrderNotification = async (order: any) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
 
   try {
-    const { fullName, user, phoneNumber, address, items, totalAmount, depositAmount } = order;
+    const { fullName, user, phoneNumber, address, items, totalAmount, depositAmount, _id } = order;
     const remainingAmount = totalAmount - depositAmount;
+    const transferCode = `HAIPHUC ${_id.toString().slice(-6).toUpperCase()}`;
     
     const adminMailOptions = {
       from: `"HỆ THỐNG HAIPHUC" <${process.env.EMAIL_USER}>`,
       to: process.env.ADMIN_EMAIL || process.env.EMAIL_USER,
-      subject: `🚨 ĐƠN HÀNG MỚI CHỜ CỌC: ${fullName.toUpperCase()}`,
+      subject: `🚨 ĐƠN HÀNG MỚI CHỜ CỌC: ${fullName.toUpperCase()} [${transferCode}]`,
       html: `
-        <div style="font-family: Arial, sans-serif; padding: 30px; border: 10px solid #000; max-width: 600px; margin: auto;">
-          <h2 style="color: #ff0000; text-align: center; font-size: 24px;">CÓ ĐƠN HÀNG MỚI ĐANG CHỜ CỌC!</h2>
+        <div style="font-family: Arial, sans-serif; padding: 30px; border: 10px solid #000; max-width: 700px; margin: auto; color: #000;">
+          <h2 style="color: #ff0000; text-align: center; font-size: 24px; text-transform: uppercase;">THÔNG BÁO ĐƠN HÀNG MỚI</h2>
           <hr style="border: 2px solid #000;">
-          <div style="background: #f9f9f9; padding: 15px; margin-bottom: 20px;">
+          
+          <div style="background: #f9f9f9; padding: 15px; margin: 20px 0; border-left: 5px solid #ff0000;">
+             <p style="font-size: 14px; opacity: 0.7;"><strong>MÃ ĐƠN HÀNG (ID):</strong> #${_id.toString().toUpperCase()}</p>
+             <p style="font-size: 18px;"><strong>MÃ CHUYỂN KHOẢN CỦA KHÁCH:</strong> <span style="background: #ff0000; color: #fff; padding: 5px 10px; font-weight: bold;">${transferCode}</span></p>
+             <hr>
              <p><strong>KHÁCH HÀNG:</strong> ${fullName}</p>
-             <p><strong>NICKNAME:</strong> ${user}</p>
+             <p><strong>LIÊN HỆ (FB/ZALO/IG):</strong> 
+                ${user.startsWith('http') 
+                  ? `<a href="${user}" style="color: #ff0000; font-weight: bold; text-decoration: underline;">BẤM VÀO ĐÂY ĐỂ CHAT</a>` 
+                  : `<span style="color: #ff0000; font-weight: bold;">${user}</span>`}
+             </p>
              <p><strong>SỐ ĐIỆN THOẠI:</strong> ${phoneNumber}</p>
              <p><strong>ĐỊA CHỈ:</strong> ${address}</p>
           </div>
-          <hr style="border: 1px solid #eee;">
-          <h3>CHI TIẾT GIỎ HÀNG:</h3>
+
+          <h3>DANH SÁCH SẢN PHẨM:</h3>
           <table style="width: 100%; border-collapse: collapse;">
-            ${items.map((i: any) => `
-              <tr style="border-bottom: 1px solid #ddd;">
-                <td style="padding: 10px;">${i.product?.name || 'Sản phẩm'}</td>
-                <td style="padding: 10px; text-align: center;">${i.size}/${i.color}</td>
-                <td style="padding: 10px; text-align: right;">x${i.quantity}</td>
+            <thead>
+              <tr style="background: #000; color: #fff;">
+                <th style="padding: 10px; text-align: left;">Sản phẩm</th>
+                <th style="padding: 10px;">Size/Màu</th>
+                <th style="padding: 10px; text-align: center;">SL</th>
+                <th style="padding: 10px; text-align: right;">Đơn giá</th>
               </tr>
-            `).join('')}
+            </thead>
+            <tbody>
+              ${items.map((i: any) => `
+                <tr style="border-bottom: 1px solid #ddd;">
+                  <td style="padding: 10px;">
+                    <div style="display: flex; align-items: center;">
+                       <span>${i.product?.name || 'Sản phẩm'}</span>
+                    </div>
+                  </td>
+                  <td style="padding: 10px; text-align: center;">${i.size || 'N/A'} / ${i.color || 'N/A'}</td>
+                  <td style="padding: 10px; text-align: center;">x${i.quantity}</td>
+                  <td style="padding: 10px; text-align: right;">${i.price.toLocaleString()}đ</td>
+                </tr>
+              `).join('')}
+            </tbody>
           </table>
 
-          <div style="margin-top: 25px; padding: 15px; background: #000; color: #fff; text-align: right;">
-             <p style="margin: 5px 0;">TỔNG CỘNG: <strong>${totalAmount.toLocaleString()}đ</strong></p>
-             <p style="margin: 5px 0; color: #00ff00;">KHÁCH CẦN CỌC: <strong>${depositAmount.toLocaleString()}đ</strong></p>
-             <p style="margin: 5px 0; color: #ff4d4d;">CÒN THIẾU (COD): <strong>${remainingAmount.toLocaleString()}đ</strong></p>
+          <div style="margin-top: 25px; padding: 20px; background: #000; color: #fff; text-align: right;">
+             <p style="margin: 5px 0; font-size: 16px;">TỔNG CỘNG: <strong>${totalAmount.toLocaleString()}đ</strong></p>
+             <p style="margin: 5px 0; color: #00ff00; font-size: 18px;">KHÁCH CẦN CỌC: <strong>${depositAmount.toLocaleString()}đ</strong></p>
+             <p style="margin: 5px 0; color: #ff4d4d; font-size: 14px;">CÒN LẠI (COD): <strong>${remainingAmount.toLocaleString()}đ</strong></p>
           </div>
 
-          <div style="margin-top: 30px; text-align: center; border: 2px solid #000; padding: 15px;">
-            <a href="http://localhost:4200/h4iphuc-secret-admin/orders" style="color: #000; text-decoration: none; font-weight: bold; letter-spacing: 2px; text-transform: uppercase;">XÁC NHẬN ĐÃ NHẬN TIỀN CỌC</a>
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="http://localhost:4200/h4iphuc-secret-admin/orders" style="display: inline-block; background: #000; color: #fff; padding: 15px 25px; text-decoration: none; font-weight: bold; letter-spacing: 2px; text-transform: uppercase; border: 2px solid #000;">XÁC NHẬN TRONG ADMIN</a>
           </div>
         </div>
       `
@@ -74,38 +98,42 @@ export const sendOrderReceivedEmail = async (order: any) => {
   if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) return;
 
   try {
-    const { fullName, email, items, totalAmount, depositAmount, paymentMethod } = order;
+    const { fullName, email, items, totalAmount, depositAmount, paymentMethod, _id } = order;
+    const transferCode = `HAIPHUC ${_id.toString().slice(-6).toUpperCase()}`;
     
     // Tạo danh sách món đồ
     const itemRows = items.map((i: any) => `
       <tr style="border-bottom: 1px solid #eee;">
         <td style="padding: 10px;">${i.product?.name || 'Sản phẩm'}</td>
-        <td style="padding: 10px; text-align: center;">${i.size}/${i.color}</td>
-        <td style="padding: 10px; text-align: right;">x${i.quantity}</td>
+        <td style="padding: 10px; text-align: center;">${i.size || 'N/A'} / ${i.color || 'N/A'}</td>
+        <td style="padding: 10px; text-align: center;">x${i.quantity}</td>
+        <td style="padding: 10px; text-align: right;">${i.price.toLocaleString()}đ</td>
       </tr>
     `).join('');
 
     const mailOptions = {
       from: `"HẢI PHÚC SHOP" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: `🔥 ĐẶT ĐƠN THÀNH CÔNG: #${order._id.toString().slice(-6).toUpperCase()}`,
+      subject: `🔥 ĐẶT ĐƠN THÀNH CÔNG: #${_id.toString().slice(-6).toUpperCase()}`,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 10px solid #000; padding: 20px; color: #000;">
-          <h2 style="text-align: center; font-size: 24px; text-transform: uppercase;">XÁC NHẬN ĐẶT ĐƠN</h2>
-          <p>Chào <strong>${fullName}</strong>, shop đã nhận được yêu cầu "lên đồ" của đại ca.</p>
+        <div style="font-family: Arial, sans-serif; max-width: 650px; margin: auto; border: 10px solid #000; padding: 30px; color: #000;">
+          <h2 style="text-align: center; font-size: 26px; text-transform: uppercase; margin-bottom: 10px;">XÁC NHẬN ĐƠN HÀNG</h2>
+          <p style="text-align: center; margin-bottom: 30px;">Chào <strong>${fullName}</strong>, cảm ơn đại ca đã tin tưởng shop.</p>
           
-          <div style="background: #f9f9f9; padding: 15px; margin: 20px 0;">
-            <p><strong>Mã đơn:</strong> #${order._id.toString().toUpperCase()}</p>
-            <p><strong>Trình trạng:</strong> <span style="color: #ff0000; font-weight: bold;">ĐANG CHỜ THANH TOÁN / XÁC NHẬN</span></p>
+          <div style="background: #f9f9f9; padding: 20px; margin: 20px 0; border: 1px solid #ddd;">
+            <p><strong>Mã đơn hàng:</strong> #${_id.toString().toUpperCase()}</p>
+            <p><strong>Trạng thái:</strong> <span style="color: #ff0000; font-weight: bold;">CHỜ THANH TOÁN CỌC</span></p>
             <p><strong>Phương thức:</strong> ${paymentMethod}</p>
           </div>
 
-          <table style="width: 100%; border-collapse: collapse;">
+          <h3 style="border-bottom: 2px solid #000; padding-bottom: 5px;">CHI TIẾT ĐƠN HÀNG:</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
              <thead>
                 <tr style="background: #eee;">
                    <th style="padding: 10px; text-align: left;">Sản phẩm</th>
-                   <th style="padding: 10px;">Size</th>
-                   <th style="padding: 10px; text-align: right;">SL</th>
+                   <th style="padding: 10px;">Size/Màu</th>
+                   <th style="padding: 10px; text-align: center;">SL</th>
+                   <th style="padding: 10px; text-align: right;">Giá</th>
                 </tr>
              </thead>
              <tbody>
@@ -113,17 +141,20 @@ export const sendOrderReceivedEmail = async (order: any) => {
              </tbody>
           </table>
 
-          <div style="text-align: right; margin-top: 20px; border-top: 2px solid #000; padding-top: 10px;">
-             <p style="font-size: 18px;">Tổng giá trị: <strong>${totalAmount.toLocaleString()}đ</strong></p>
-             <p style="font-size: 20px; color: #ff0000;">Cần cọc/Thanh toán: <strong>${depositAmount.toLocaleString()}đ</strong></p>
+          <div style="text-align: right; margin-top: 20px; border-top: 2px solid #000; padding-top: 15px;">
+             <p style="font-size: 16px; margin: 5px 0;">Tổng đơn: <strong>${totalAmount.toLocaleString()}đ</strong></p>
+             <p style="font-size: 20px; color: #ff0000; margin: 5px 0;">SỐ TIỀN CẦN CỌC: <strong>${depositAmount.toLocaleString()}đ</strong></p>
           </div>
 
-          <div style="margin-top: 30px; padding: 15px; border: 2px dashed #000; text-align: center;">
-             <p>Nếu đại ca dùng <strong>QR CODE</strong>, vui lòng kiểm tra lại hình ảnh QR tại web hoặc Bank theo STK: <strong>0972221123 (MB BANK)</strong>.</p>
-             <p>Nội dung: <strong>HAIPHUC ${order._id.toString().slice(-6).toUpperCase()}</strong></p>
+          <div style="margin-top: 35px; padding: 20px; border: 3px solid #ff0000; background: #fff5f5; text-align: center;">
+             <p style="font-weight: bold; font-size: 18px; margin-top: 0; color: #ff0000;">HƯỚNG DẪN THANH TOÁN CỌC</p>
+             <p>STK: <strong>0972221123</strong> (MB BANK)</p>
+             <p>Chủ TK: <strong>PHAM HAI PHUC</strong></p>
+             <p style="font-size: 20px;">Nội dung: <strong style="background: #ff0000; color: #fff; padding: 2px 10px;">${transferCode}</strong></p>
+             <p style="font-size: 12px; font-style: italic; margin-top: 10px;">(Vui lòng ghi đúng nội dung để đơn được duyệt tự động nhanh nhất)</p>
           </div>
 
-          <p style="font-size: 12px; margin-top: 30px; opacity: 0.5; text-align: center;">Sau khi nhận được tiền, Shop sẽ gank đơn ngay lập tức!</p>
+          <p style="font-size: 12px; margin-top: 40px; opacity: 0.6; text-align: center;">Sau khi nhận được tiền cọc, Shop sẽ tiến hành mua hàng và vận chuyển ngay cho đại ca!</p>
         </div>
       `
     };
@@ -146,12 +177,12 @@ export const sendOrderEmail = async (order: any) => {
   }
 
   try {
-    const { fullName, email, items, totalAmount, depositAmount } = order;
+    const { fullName, email, items, totalAmount, depositAmount, _id } = order;
 
     const itemRows = items.map((item: any) => `
       <tr style="border-bottom: 1px solid #eee;">
         <td style="padding: 10px;">${item.product?.name || 'Sản phẩm'}</td>
-        <td style="padding: 10px; text-align: center;">${item.size || 'N/A'} - ${item.color || 'N/A'}</td>
+        <td style="padding: 10px; text-align: center;">${item.size || 'N/A'} / ${item.color || 'N/A'}</td>
         <td style="padding: 10px; text-align: center;">x${item.quantity}</td>
         <td style="padding: 10px; text-align: right;">${item.price.toLocaleString()}đ</td>
       </tr>
@@ -160,20 +191,20 @@ export const sendOrderEmail = async (order: any) => {
     const customerMailOptions = {
       from: `"HẢI PHÚC SHOP" <${process.env.EMAIL_USER}>`,
       to: email,
-      subject: `✅ THANH TOÁN THÀNH CÔNG: #${order._id.toString().slice(-6).toUpperCase()}`,
+      subject: `✅ XÁC NHẬN TIỀN CỌC: #${_id.toString().slice(-6).toUpperCase()}`,
       html: `
-        <div style="font-family: 'Helvetica', Arial, sans-serif; color: #000; max-width: 600px; margin: auto; border: 10px solid #000; padding: 20px;">
-          <h1 style="text-align: center; font-size: 30px; letter-spacing: 5px; border-bottom: 2px solid #000; padding-bottom: 20px;">THANK YOU, ${fullName.toUpperCase()}!</h1>
+        <div style="font-family: 'Helvetica', Arial, sans-serif; color: #000; max-width: 650px; margin: auto; border: 10px solid #000; padding: 30px;">
+          <h1 style="text-align: center; font-size: 28px; letter-spacing: 2px; border-bottom: 2px solid #000; padding-bottom: 20px; text-transform: uppercase;">TIỀN CỌC ĐÃ ĐƯỢC XÁC NHẬN</h1>
           
-          <p>Chào đại ca/chị đẹp, Shop đã nhận được khoản thanh toán cọc cho đơn hàng của mình.</p>
+          <p>Chào <strong>${fullName.toUpperCase()}</strong>, Shop đã nhận được khoản thanh toán cọc của đại ca. Đơn hàng hiện đang được xử lý.</p>
           
-          <div style="background: #f4f4f4; padding: 20px; margin: 20px 0;">
-            <h3 style="margin-top: 0;">TÓM TẮT ĐƠN HÀNG</h3>
+          <div style="background: #f4f4f4; padding: 20px; margin: 25px 0;">
+            <h3 style="margin-top: 0; border-bottom: 1px solid #ccc; padding-bottom: 10px;">TÓM TẮT ĐƠN HÀNG</h3>
             <table style="width: 100%; border-collapse: collapse;">
               <thead>
                 <tr style="background: #000; color: #fff;">
                   <th style="padding: 10px; text-align: left;">Sản phẩm</th>
-                  <th style="padding: 10px;">Size/Màu</th>
+                  <th style="padding: 10px;">Màu/Size</th>
                   <th style="padding: 10px;">SL</th>
                   <th style="padding: 10px;">Giá</th>
                 </tr>
@@ -184,18 +215,18 @@ export const sendOrderEmail = async (order: any) => {
             </table>
           </div>
 
-          <div style="text-align: right; line-height: 1.6;">
+          <div style="text-align: right; line-height: 1.8;">
             <p>Tổng giá trị: <strong>${totalAmount.toLocaleString()}đ</strong></p>
-            <p style="color: #ff0000; font-size: 18px;">Đã cọc: <strong>${depositAmount.toLocaleString()}đ</strong></p>
-            <p style="border-top: 1px solid #000; padding-top: 10px;">Số tiền còn lại khi nhận hàng: <strong>${(totalAmount - depositAmount).toLocaleString()}đ</strong></p>
+            <p style="color: #00aa00; font-size: 18px;">Đã thanh toán cọc: <strong>${depositAmount.toLocaleString()}đ</strong></p>
+            <p style="border-top: 1px solid #000; padding-top: 10px; font-size: 18px;">Số tiền còn lại (COD): <strong>${(totalAmount - depositAmount).toLocaleString()}đ</strong></p>
           </div>
 
-          <div style="margin-top: 30px; border-left: 5px solid #000; padding-left: 15px;">
+          <div style="margin-top: 35px; border-left: 5px solid #00aa00; padding-left: 20px; background: #f0fff0; padding-top: 10px; padding-bottom: 10px;">
             <p><strong>DỰ KIẾN GIAO HÀNG:</strong> 7-10 ngày làm việc (với hàng ORDER).</p>
-            <p><strong>MÃ VẬN ĐƠN:</strong> Sẽ được cập nhật ngay khi hàng về kho Việt Nam.</p>
+            <p>Chúng tôi sẽ gửi mail thông báo kèm <strong>MÃ VẬN ĐƠN</strong> ngay khi hàng được gửi đi.</p>
           </div>
 
-          <p style="text-align: center; margin-top: 40px; font-size: 10px; color: #888;">&copy; 2024 HAIPHUC SHOP | HÀNG ORDER UY TÍN</p>
+          <p style="text-align: center; margin-top: 50px; font-size: 11px; color: #888;">&copy; 2024 HAIPHUC SHOP | HÀNG ORDER CAO CẤP</p>
         </div>
       `
     };

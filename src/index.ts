@@ -1,28 +1,24 @@
-import dotenv from 'dotenv';
-dotenv.config();
-
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import productRoutes from './routes/productRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
+import { config } from './config/index.js';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './config/swagger.js';
 
 const app = express();
-const PORT = process.env.PORT || 5005;
+
+// Swagger
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Middleware
-const allowedOrigins = [
-  'http://localhost:4200', 
-  'https://haiphuc-shop.vercel.app'
-];
-
 app.use(cors({
   origin: (origin, callback) => {
     // Cho phép nếu không có origin (như curl hoặc server-to-server)
-    // Hoặc nếu nó nằm trong danh sách fix cứng
-    // Hoặc nếu nó là subdomain của Vercel (.vercel.app)
-    if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+    // Hoặc nếu nó nằm trong danh sách fix cứng hoặc subdomain của Vercel
+    if (!origin || config.cors.allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
       callback(null, true);
     } else {
       callback(new Error('Chừa cái thói truy cập trái phép nha! (CORS)'));
@@ -43,14 +39,36 @@ app.get('/', (req, res) => {
 });
 
 // MongoDB connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/haiphuc-shop';
-
 console.log('⏳ Connecting to MongoDB...');
-mongoose.connect(MONGODB_URI)
-  .then(() => {
+mongoose.connect(config.mongodbUri)
+  .then(async () => {
     console.log('✅ Connected to MongoDB');
-    app.listen(PORT, () => {
-      console.log(`🚀 Server is running on http://localhost:${PORT}`);
+    
+    // Auto-create Admin User from .env if not exists
+    if (config.admin.user && config.admin.pass) {
+      const User = (await import('./models/User.js')).default;
+      const adminExists = await User.findOne({ 
+        $or: [{ username: config.admin.user }, { email: 'admin@haiphucshop.com' }] 
+      });
+      if (!adminExists) {
+        console.log('👤 Creating initial Admin user from .env...');
+        try {
+          await User.create({
+            username: config.admin.user,
+            password: config.admin.pass,
+            email: 'admin@haiphucshop.com',
+            role: 'admin',
+            fullName: 'Hải Phúc Admin'
+          });
+          console.log('✅ Admin user created successfully');
+        } catch (err) {
+          console.warn('⚠️ Admin user might already exist, skipping creation.');
+        }
+      }
+    }
+
+    app.listen(config.port, () => {
+      console.log(`🚀 Server is running on http://localhost:${config.port}`);
     });
   })
   .catch((err) => {
