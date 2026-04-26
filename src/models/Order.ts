@@ -75,7 +75,7 @@ const OrderSchema: Schema = new Schema(
   }
 );
 // TỰ ĐỘNG TẠO MÃ ĐƠN HÀNG NGẮN TỪ _ID TRƯỚC KHI SAVE
-OrderSchema.pre('save', async function() {
+OrderSchema.pre('save', async function(this: IOrder) {
   if (!this.orderCode) {
     this.orderCode = this._id.toString().slice(-8).toUpperCase();
   }
