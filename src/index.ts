@@ -4,6 +4,8 @@ import cors from 'cors';
 import productRoutes from './routes/productRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
+import webhookRoutes from './routes/webhookRoutes.js';
+
 import { config } from './config/index.js';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger.js';
@@ -44,6 +46,8 @@ app.use(express.json());
 app.use('/api/products', productRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/v1/webhooks', webhookRoutes);
+
 
 // Health check
 app.get('/', (req, res) => {

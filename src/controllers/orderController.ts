@@ -5,7 +5,7 @@ import { sendOrderEmail, sendAdminOrderNotification, sendOrderReceivedEmail } fr
 
 export const createOrder = async (req: AuthRequest, res: Response) => {
   try {
-    const { user, items, fullName, phoneNumber, email, address, paymentMethod, depositRate } = req.body;
+    const { user, items, fullName, phoneNumber, email, address, paymentMethod, depositRate, orderCode } = req.body;
 
     if (!user || !items || items.length === 0 || !fullName || !phoneNumber || !email || !address) {
       return res.status(400).json({ message: 'Thông tin đơn hàng không đầy đủ!' });
@@ -23,7 +23,14 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     }));
 
     // 2. Calculate amounts based on selected rate
-    const { totalAmount, depositAmount } = calculateOrderAmount(orderItems, depositRate || 0.7);
+    const shippingFee = 30000;
+    const currentRate = (depositRate !== undefined && depositRate !== null) ? Number(depositRate) : 0.7;
+    
+    const { totalAmount: subTotal } = calculateOrderAmount(orderItems, currentRate);
+    const finalTotal = subTotal + shippingFee;
+    
+    // Tiền cọc tính trên tổng tiền cuối cùng (bao gồm ship)
+    const finalDeposit = Math.round(finalTotal * currentRate);
 
     // 3. Create Order
     const newOrder = new Order({
@@ -34,12 +41,13 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
       email,
       address,
       items: orderItems,
-      totalAmount,
-      depositAmount: paymentMethod === 'COD' ? 0 : depositAmount,
+      totalAmount: finalTotal,
+      depositAmount: paymentMethod === 'COD' ? 0 : finalDeposit,
       depositRate: paymentMethod === 'COD' ? 0 : (depositRate || 0.7),
       paymentMethod: paymentMethod || 'QR_CODE',
       paymentStatus: 'PENDING',
-      status: 'PENDING_DEPOSIT'
+      status: 'PENDING_DEPOSIT',
+      orderCode: orderCode || undefined // Dùng mã từ FE gửi lên nếu có
     });
 
     await newOrder.save();
@@ -69,9 +77,7 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
       return res.status(401).json({ message: 'Bạn cần đăng nhập để xem đơn hàng!' });
     }
 
-    console.log('--- DEBUG MY ORDERS ---');
-    console.log('UserID từ Token:', req.user.id);
-    console.log('Query gửi đến DB:', { userId: req.user.id });
+
 
     const { page = 1, limit = 10, showAll, claimAll } = req.query;
     const currentPage = Number(page);
@@ -87,13 +93,13 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
     });
 
     if (unlinkedOrders.length > 0) {
-      console.log(`[MIGRATION] Đang cập nhật ${unlinkedOrders.length} đơn hàng...`);
+
       for (const order of unlinkedOrders) {
         if (!order.userId) order.userId = req.user.id as any;
         if (!order.orderCode) order.orderCode = order._id.toString().slice(-8).toUpperCase();
         await order.save();
       }
-      console.log('[MIGRATION] Gán dữ liệu thành công!');
+
     }
 
     // 2. Xác định Filter
@@ -111,24 +117,15 @@ export const getMyOrders = async (req: AuthRequest, res: Response) => {
       Order.countDocuments(filter)
     ]);
 
-    console.log(`Số lượng đơn hàng tìm thấy cho ID [${req.user.id}] là: ${totalItems}`);
 
-    // Nếu vẫn rỗng, log cấu trúc thực tế của 1 đơn hàng trong DB
-    if (totalItems === 0) {
-        const sampleOrder = await Order.findOne();
-        console.log('Dữ liệu rỗng! Cấu trúc đơn hàng đầu tiên trong DB:', sampleOrder);
-    }
+
+
 
     res.json({
       data: orders,
       totalItems,
       totalPages: Math.ceil(totalItems / itemsPerPage),
-      currentPage,
-      debug_info: {
-        user_id: req.user.id,
-        filter_applied: filter,
-        total_in_db: await Order.countDocuments({})
-      }
+      currentPage
     });
   } catch (error: any) {
     console.error('ERROR IN getMyOrders:', error);

@@ -26,6 +26,7 @@ export interface IOrder extends Document {
   paymentStatus: 'PENDING' | 'DEPOSITED' | 'COMPLETED';
   paymentMethod: 'QR_CODE' | 'COD';
   orderCode: string;
+  paidAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -67,7 +68,8 @@ const OrderSchema: Schema = new Schema(
       enum: ['QR_CODE', 'COD'],
       default: 'QR_CODE'
     },
-    orderCode: { type: String, unique: true, index: true }
+    orderCode: { type: String, unique: true, index: true },
+    paidAt: { type: Date }
   },
   {
     timestamps: true,
@@ -85,7 +87,7 @@ OrderSchema.pre('save', async function(this: IOrder) {
 OrderSchema.post('save', async function(doc) {
   // @ts-ignore
   if (doc.paymentStatus === 'DEPOSITED') {
-     console.log(`[Order Model] Status changed to DEPOSITED for order ${doc._id}. Triggering email...`);
+
      // Populate sản phẩm trước khi gửi mail để có tên và ảnh
      const populatedOrder = await doc.populate('items.product');
      await sendOrderEmail(populatedOrder);

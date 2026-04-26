@@ -33,5 +33,15 @@ export const config = {
     allowedOrigins: process.env.ALLOWED_ORIGINS 
       ? process.env.ALLOWED_ORIGINS.split(',') 
       : ['http://localhost:4200', 'https://haiphuc-shop.vercel.app']
+  },
+  ghtk: {
+    apiToken: process.env.GHTK_API_TOKEN || '',
+    baseUrl: process.env.GHTK_BASE_URL || 'https://services.giaohangtietkiem.vn'
+  },
+  payment: {
+    webhookToken: process.env.CASSO_WEBHOOK_TOKEN || 'hp-secure-token-2024',
+    bankName: process.env.BANK_NAME || 'MB BANK',
+    bankAccount: process.env.BANK_ACCOUNT || '0972221123',
+    accountName: process.env.ACCOUNT_NAME || 'PHAM HAI PHUC'
   }
 };

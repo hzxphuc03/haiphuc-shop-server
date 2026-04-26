@@ -142,7 +142,7 @@ export const createProduct = async (req: Request, res: Response): Promise<void> 
     });
 
     const savedProduct = await newProduct.save();
-    console.log('✅ Product saved successfully:', savedProduct._id);
+
     res.status(201).json(savedProduct);
   } catch (error: any) {
     console.error('❌ Create Product Error:', error);
@@ -224,7 +224,7 @@ export const updateProduct = async (req: Request, res: Response): Promise<void> 
       return;
     }
 
-    console.log('✅ Product updated successfully:', id);
+
     res.status(200).json(updatedProduct);
   } catch (error: any) {
     console.error('❌ Update Product Error:', error);
