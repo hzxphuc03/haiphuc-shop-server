@@ -1,8 +1,9 @@
 import type { Request, Response } from 'express';
+import type { AuthRequest } from '../middleware/auth.js';
 import Order, { calculateOrderAmount } from '../models/Order.js';
 import { sendOrderEmail, sendAdminOrderNotification, sendOrderReceivedEmail } from '../utils/email.js';
 
-export const createOrder = async (req: Request, res: Response) => {
+export const createOrder = async (req: AuthRequest, res: Response) => {
   try {
     const { user, items, fullName, phoneNumber, email, address, paymentMethod, depositRate } = req.body;
 
@@ -26,6 +27,7 @@ export const createOrder = async (req: Request, res: Response) => {
 
     // 3. Create Order
     const newOrder = new Order({
+      userId: req.user?.id,
       user,
       fullName,
       phoneNumber,
@@ -36,19 +38,20 @@ export const createOrder = async (req: Request, res: Response) => {
       depositAmount: paymentMethod === 'COD' ? 0 : depositAmount,
       depositRate: paymentMethod === 'COD' ? 0 : (depositRate || 0.7),
       paymentMethod: paymentMethod || 'QR_CODE',
-      paymentStatus: 'PENDING'
+      paymentStatus: 'PENDING',
+      status: 'PENDING_DEPOSIT'
     });
 
     await newOrder.save();
 
     // 🔔 GỬI THÔNG BÁO NGAY LẬP TỨC
     const populatedOrder = await newOrder.populate('items.product');
-    
+
     // Báo cho Admin
-    sendAdminOrderNotification(populatedOrder); 
-    
+    sendAdminOrderNotification(populatedOrder);
+
     // Báo cho Khách (Xác nhận đã nhận đơn)
-    sendOrderReceivedEmail(populatedOrder); 
+    sendOrderReceivedEmail(populatedOrder);
 
     res.status(201).json({
       message: 'Đặt đơn thành công! Vui lòng chờ đại ca xác nhận tiền cọc.',
@@ -60,107 +63,175 @@ export const createOrder = async (req: Request, res: Response) => {
   }
 };
 
-export const getMyOrders = async (req: Request, res: Response) => {
-    try {
-        const { user, page = 1, limit = 10 } = req.query;
-        if (!user) return res.status(400).json({ message: 'User identifier is required' });
-        
-        const currentPage = Number(page);
-        const itemsPerPage = Number(limit);
-        const skip = (currentPage - 1) * itemsPerPage;
-
-        const [orders, totalItems] = await Promise.all([
-          Order.find({ user: user as string })
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(itemsPerPage)
-            .populate('items.product'),
-          Order.countDocuments({ user: user as string })
-        ]);
-
-        res.json({
-          data: orders,
-          totalItems,
-          totalPages: Math.ceil(totalItems / itemsPerPage),
-          currentPage
-        });
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
+export const getMyOrders = async (req: AuthRequest, res: Response) => {
+  try {
+    if (!req.user?.id) {
+      return res.status(401).json({ message: 'Bạn cần đăng nhập để xem đơn hàng!' });
     }
+
+    console.log('--- DEBUG MY ORDERS ---');
+    console.log('UserID từ Token:', req.user.id);
+    console.log('Query gửi đến DB:', { userId: req.user.id });
+
+    const { page = 1, limit = 10, showAll, claimAll } = req.query;
+    const currentPage = Number(page);
+    const itemsPerPage = Number(limit);
+    const skip = (currentPage - 1) * itemsPerPage;
+
+    // AUTO MIGRATION: Gán userId cho đơn hàng cũ (bước 1) & Populate orderCode (bước 2)
+    const unlinkedOrders = await Order.find({ 
+      $or: [
+        { userId: { $exists: false } },
+        { orderCode: { $exists: false } }
+      ]
+    });
+
+    if (unlinkedOrders.length > 0) {
+      console.log(`[MIGRATION] Đang cập nhật ${unlinkedOrders.length} đơn hàng...`);
+      for (const order of unlinkedOrders) {
+        if (!order.userId) order.userId = req.user.id as any;
+        if (!order.orderCode) order.orderCode = order._id.toString().slice(-8).toUpperCase();
+        await order.save();
+      }
+      console.log('[MIGRATION] Gán dữ liệu thành công!');
+    }
+
+    // 2. Xác định Filter
+    let filter: any = { userId: req.user.id };
+    if (req.user.role === 'admin' && showAll === 'true') {
+        filter = {};
+    }
+
+    const [orders, totalItems] = await Promise.all([
+      Order.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(itemsPerPage)
+        .populate('items.product'),
+      Order.countDocuments(filter)
+    ]);
+
+    console.log(`Số lượng đơn hàng tìm thấy cho ID [${req.user.id}] là: ${totalItems}`);
+
+    // Nếu vẫn rỗng, log cấu trúc thực tế của 1 đơn hàng trong DB
+    if (totalItems === 0) {
+        const sampleOrder = await Order.findOne();
+        console.log('Dữ liệu rỗng! Cấu trúc đơn hàng đầu tiên trong DB:', sampleOrder);
+    }
+
+    res.json({
+      data: orders,
+      totalItems,
+      totalPages: Math.ceil(totalItems / itemsPerPage),
+      currentPage,
+      debug_info: {
+        user_id: req.user.id,
+        filter_applied: filter,
+        total_in_db: await Order.countDocuments({})
+      }
+    });
+  } catch (error: any) {
+    console.error('ERROR IN getMyOrders:', error);
+    res.status(500).json({ message: error.message });
+  }
 };
 
 export const getAllOrders = async (req: Request, res: Response) => {
-    try {
-        const { search, status, page = 1, limit = 10 } = req.query;
-        
-        const filter: any = {};
-        
-        // Lọc theo trạng thái đơn hàng
-        if (status && status !== 'ALL') {
-          filter.paymentStatus = status;
-        }
+  try {
+    const { search, status, page = 1, limit = 10 } = req.query;
 
-        // Tìm kiếm theo tên hoặc SĐT
-        if (search && typeof search === 'string') {
-          filter.$or = [
-            { fullName: { $regex: search, $options: 'i' } },
-            { phoneNumber: { $regex: search, $options: 'i' } }
-          ];
-        }
+    const filter: any = {};
 
-        const currentPage = Number(page);
-        const itemsPerPage = Number(limit);
-        const skip = (currentPage - 1) * itemsPerPage;
-
-        const [orders, totalItems] = await Promise.all([
-          Order.find(filter)
-            .sort({ createdAt: -1 })
-            .skip(skip)
-            .limit(itemsPerPage)
-            .populate('items.product'),
-          Order.countDocuments(filter)
-        ]);
-
-        res.json({
-          data: orders,
-          totalItems,
-          totalPages: Math.ceil(totalItems / itemsPerPage),
-          currentPage
-        });
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
+    // Lọc theo trạng thái đơn hàng
+    if (status && status !== 'ALL') {
+      filter.status = status;
     }
+
+    // Tìm kiếm theo mã đơn, tên hoặc SĐT
+    if (search && typeof search === 'string') {
+      filter.$or = [
+        { orderCode: { $regex: search, $options: 'i' } },
+        { fullName: { $regex: search, $options: 'i' } },
+        { phoneNumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    const currentPage = Number(page);
+    const itemsPerPage = Number(limit);
+    const skip = (currentPage - 1) * itemsPerPage;
+
+    const [orders, totalItems] = await Promise.all([
+      Order.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(itemsPerPage)
+        .populate('items.product'),
+      Order.countDocuments(filter)
+    ]);
+
+    res.json({
+      data: orders,
+      totalItems,
+      totalPages: Math.ceil(totalItems / itemsPerPage),
+      currentPage
+    });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // Admin update status
 export const updateOrderStatus = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const { paymentStatus } = req.body;
-        
-        const order = await Order.findByIdAndUpdate(id, { paymentStatus }, { new: true }).populate('items.product');
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-        
-        // Nếu xác nhận đã cọc, gửi mail thông báo cho khách và admin
-        if (paymentStatus === 'DEPOSITED') {
-            await sendOrderEmail(order);
-        }
-        
-        res.json({ message: 'Trạng thái đơn hàng đã được cập nhật!', order });
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    const updateData: any = { status };
+
+    // Đồng bộ paymentStatus dựa theo status mới
+    if (status === 'DEPOSITED' || status === 'CONFIRMED' || status === 'ARRIVED_VN' || status === 'SHIPPING') {
+      updateData.paymentStatus = 'DEPOSITED';
+    } else if (status === 'SUCCESS') {
+      updateData.paymentStatus = 'COMPLETED';
+    } else if (status === 'PENDING_DEPOSIT') {
+      updateData.paymentStatus = 'PENDING';
     }
+
+    const order = await Order.findByIdAndUpdate(id, updateData, { new: true }).populate('items.product');
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    // Nếu xác nhận đã cọc, gửi mail thông báo cho khách và admin
+    if (status === 'DEPOSITED') {
+      await sendOrderEmail(order);
+    }
+
+    res.json({ message: 'Trạng thái đơn hàng đã được cập nhật!', order });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Admin get single order
+export const getOrderById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const order = await Order.findById(id).populate('items.product');
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+    res.json(order);
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };
 
 // Admin delete order
 export const deleteOrder = async (req: Request, res: Response) => {
-    try {
-        const { id } = req.params;
-        const order = await Order.findByIdAndDelete(id);
-        if (!order) return res.status(404).json({ message: 'Order not found' });
-        
-        res.json({ message: 'Đơn hàng đã được xóa vĩnh viễn!' });
-    } catch (error: any) {
-        res.status(500).json({ message: error.message });
-    }
+  try {
+    const { id } = req.params;
+    const order = await Order.findByIdAndDelete(id);
+    if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    res.json({ message: 'Đơn hàng đã được xóa vĩnh viễn!' });
+  } catch (error: any) {
+    res.status(500).json({ message: error.message });
+  }
 };

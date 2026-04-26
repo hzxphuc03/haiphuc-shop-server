@@ -12,6 +12,7 @@ export interface IOrderItem {
 }
 
 export interface IOrder extends Document {
+  userId?: mongoose.Types.ObjectId;
   user: string; // Nickname/Reference
   fullName: string;
   phoneNumber: string;
@@ -21,14 +22,17 @@ export interface IOrder extends Document {
   totalAmount: number;
   depositAmount: number;
   depositRate: number;
+  status: 'PENDING_DEPOSIT' | 'DEPOSITED' | 'CONFIRMED' | 'ARRIVED_VN' | 'SHIPPING' | 'SUCCESS' | 'CANCELLED';
   paymentStatus: 'PENDING' | 'DEPOSITED' | 'COMPLETED';
   paymentMethod: 'QR_CODE' | 'COD';
+  orderCode: string;
   createdAt: Date;
   updatedAt: Date;
 }
 
 const OrderSchema: Schema = new Schema(
   {
+    userId: { type: Schema.Types.ObjectId, ref: 'User' },
     user: { type: String, required: true },
     fullName: { type: String, required: true },
     phoneNumber: { type: String, required: true },
@@ -48,6 +52,11 @@ const OrderSchema: Schema = new Schema(
     totalAmount: { type: Number, required: true, min: 0 },
     depositAmount: { type: Number, required: true, min: 0 },
     depositRate: { type: Number, default: 0.7 },
+    status: {
+      type: String,
+      enum: ['PENDING_DEPOSIT', 'DEPOSITED', 'CONFIRMED', 'ARRIVED_VN', 'SHIPPING', 'SUCCESS', 'CANCELLED'],
+      default: 'PENDING_DEPOSIT'
+    },
     paymentStatus: {
       type: String,
       enum: ['PENDING', 'DEPOSITED', 'COMPLETED'],
@@ -57,13 +66,20 @@ const OrderSchema: Schema = new Schema(
       type: String,
       enum: ['QR_CODE', 'COD'],
       default: 'QR_CODE'
-    }
+    },
+    orderCode: { type: String, unique: true, index: true }
   },
   {
     timestamps: true,
     versionKey: false
   }
 );
+// TỰ ĐỘNG TẠO MÃ ĐƠN HÀNG NGẮN TỪ _ID TRƯỚC KHI SAVE
+OrderSchema.pre('save', async function() {
+  if (!this.orderCode) {
+    this.orderCode = this._id.toString().slice(-8).toUpperCase();
+  }
+});
 
 // TỰ ĐỘNG GỬI MAIL KHI TRẠNG THÁI CHUYỂN SANG 'DEPOSITED'
 OrderSchema.post('save', async function(doc) {
