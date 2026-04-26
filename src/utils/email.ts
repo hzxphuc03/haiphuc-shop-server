@@ -165,6 +165,15 @@ export const sendOrderReceivedEmail = async (order: any) => {
              <p style="font-size: 12px; font-style: italic; margin-top: 10px;">(Vui lòng ghi đúng nội dung để đơn được duyệt tự động nhanh nhất)</p>
           </div>
 
+          <div style="margin-top: 20px; border-left: 5px solid #000; padding-left: 15px; font-size: 14px; opacity: 0.8;">
+             <p><strong>Thời gian giao hàng dự kiến:</strong></p>
+             <ul style="padding-left: 20px; margin-top: 5px;">
+                <li>Hàng sẵn: 1-2 ngày (Khu vực HN)</li>
+                <li>Hàng sẵn: 3-5 ngày (Tỉnh khác)</li>
+                <li>Hàng ORDER: 7-10 ngày làm việc</li>
+             </ul>
+          </div>
+
           <p style="font-size: 12px; margin-top: 40px; opacity: 0.6; text-align: center;">Sau khi nhận được tiền, Shop sẽ tiến hành xử lý ngay cho đại ca!</p>
         </div>
       `
@@ -188,7 +197,7 @@ export const sendOrderEmail = async (order: any) => {
   }
 
   try {
-    const { fullName, email, items, totalAmount, depositAmount, depositRate, orderCode, _id } = order;
+    const { fullName, email, address, items, totalAmount, depositAmount, depositRate, orderCode, _id } = order;
     const isFullPayment = depositRate >= 0.99;
 
     const itemRows = items.map((item: any) => `
@@ -240,7 +249,13 @@ export const sendOrderEmail = async (order: any) => {
           </div>
 
           <div style="margin-top: 35px; border-left: 5px solid #00aa00; padding-left: 20px; background: #f0fff0; padding-top: 10px; padding-bottom: 10px;">
-            <p><strong>DỰ KIẾN GIAO HÀNG:</strong> 7-10 ngày làm việc (với hàng ORDER).</p>
+            <p><strong>DỰ KIẾN GIAO HÀNG:</strong> ${
+              items.some((i: any) => i.type === 'ORDER') 
+                ? '7-10 ngày làm việc (với hàng ORDER)' 
+                : (address.toLowerCase().includes('hà nội') || address.toLowerCase().includes('hn') 
+                    ? '1-2 ngày (Hàng sẵn - Khu vực HN)' 
+                    : '3-5 ngày (Hàng sẵn - Tỉnh khác)')
+            }</p>
             <p>Chúng tôi sẽ gửi mail thông báo kèm <strong>MÃ VẬN ĐƠN</strong> ngay khi hàng được gửi đi.</p>
           </div>
 
