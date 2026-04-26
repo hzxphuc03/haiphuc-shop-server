@@ -249,6 +249,25 @@ export const getOrderById = async (req: Request, res: Response) => {
     const { id } = req.params;
     const order = await Order.findById(id).populate('items.product');
     if (!order) return res.status(404).json({ message: 'Order not found' });
+
+    // PROACTIVE CHECK: Nếu đang đợi cọc và là PayOS, thử check trực tiếp với PayOS
+    // Việc này giúp xử lý trường hợp Webhook đến chậm hoặc bị block
+    if (order.status === 'PENDING_DEPOSIT' && order.paymentMethod === 'QR_CODE' && order.paymentLinkId) {
+        try {
+            const paymentInfo = await payos.paymentRequests.get(Number(order.paymentLinkId));
+            if (paymentInfo.status === 'PAID') {
+                order.status = 'DEPOSITED';
+                order.paymentStatus = 'DEPOSITED';
+                // @ts-ignore
+                order.paidAt = new Date();
+                await order.save();
+                console.log(`✅ [PROACTIVE] Order ${order.orderCode} marked as PAID via PayOS API check.`);
+            }
+        } catch (err: any) {
+            console.error('⚠️ [PROACTIVE] PayOS check failed:', err.message);
+        }
+    }
+
     res.json(order);
   } catch (error: any) {
     res.status(500).json({ message: error.message });
