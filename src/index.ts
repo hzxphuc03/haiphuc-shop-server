@@ -5,6 +5,7 @@ import productRoutes from './routes/productRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
+import customerRoutes from './routes/customerRoutes.js';
 
 import { config } from './config/index.js';
 import swaggerUi from 'swagger-ui-express';
@@ -47,6 +48,7 @@ app.use('/api/v1/products', productRoutes);
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/orders', orderRoutes);
 app.use('/api/v1/webhooks', webhookRoutes);
+app.use('/api/v1/admin/customers', customerRoutes);
 
 
 // Health check

@@ -6,10 +6,13 @@ export interface IUser extends Document {
   email: string;
   password?: string;
   fullName?: string;
+  phone?: string;
   avatar?: string;
   provider: 'local' | 'google' | 'facebook';
   socialId?: string;
   role: 'admin' | 'user';
+  status: 'active' | 'inactive';
+  isDeleted: boolean;
   refreshToken?: string;
   comparePassword(password: string): Promise<boolean>;
 }
@@ -19,14 +22,20 @@ const UserSchema: Schema = new Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String },
   fullName: { type: String },
+  phone: { type: String },
   avatar: { type: String },
   provider: { type: String, enum: ['local', 'google', 'facebook'], default: 'local' },
   socialId: { type: String, unique: true, sparse: true },
   role: { type: String, enum: ['admin', 'user'], default: 'user' },
+  status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+  isDeleted: { type: Boolean, default: false },
   refreshToken: { type: String }
 }, {
   timestamps: true
 });
+
+// Indexes for search
+UserSchema.index({ fullName: 'text', email: 'text' });
 
 // Hash password before saving
 UserSchema.pre<IUser>('save', async function() {
