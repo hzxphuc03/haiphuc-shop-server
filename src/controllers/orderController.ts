@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import type { AuthRequest } from '../middleware/auth.js';
 import Order, { calculateOrderAmount } from '../models/Order.js';
 import { sendOrderEmail, sendAdminOrderNotification, sendOrderReceivedEmail } from '../utils/email.js';
+import payos from '../utils/payos.js';
 
 export const createOrder = async (req: AuthRequest, res: Response) => {
   try {
@@ -52,6 +53,39 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
 
     await newOrder.save();
 
+    // 4. Nếu là thanh toán QR (PayOS), tạo link thanh toán
+    let checkoutUrl = null;
+    if (paymentMethod === 'QR_CODE') {
+        try {
+            // PayOS yêu cầu orderCode là INT
+            // Ta dùng 6 số cuối của timestamp + số ngẫu nhiên
+            const payosOrderCode = Number(Date.now().toString().slice(-9));
+            
+            // Lưu lại mã này vào paymentLinkId để đối soát webhook
+            newOrder.paymentLinkId = payosOrderCode.toString();
+            await newOrder.save();
+
+            const paymentData = {
+                orderCode: payosOrderCode,
+                amount: newOrder.depositAmount,
+                description: `HP ${newOrder.orderCode}`,
+                cancelUrl: `${process.env.FRONTEND_URL || 'https://haiphuc-shop.vercel.app'}/checkout`,
+                returnUrl: `${process.env.FRONTEND_URL || 'https://haiphuc-shop.vercel.app'}/order-success/${newOrder._id}`,
+                items: orderItems.map((item: any) => ({
+                    name: 'Gank đồ Hải Phúc',
+                    quantity: item.quantity,
+                    price: item.price
+                }))
+            };
+
+            const paymentLink = await payos.paymentRequests.create(paymentData);
+            checkoutUrl = paymentLink.checkoutUrl;
+        } catch (payosError: any) {
+            console.error('PayOS Create Link Error:', payosError);
+            // Vẫn cho tạo đơn nhưng báo lỗi link
+        }
+    }
+
     // 🔔 GỬI THÔNG BÁO NGAY LẬP TỨC
     const populatedOrder = await newOrder.populate('items.product');
 
@@ -62,8 +96,9 @@ export const createOrder = async (req: AuthRequest, res: Response) => {
     sendOrderReceivedEmail(populatedOrder);
 
     res.status(201).json({
-      message: 'Đặt đơn thành công! Vui lòng chờ đại ca xác nhận tiền cọc.',
-      order: newOrder
+      message: 'Đặt đơn thành công!',
+      order: newOrder,
+      checkoutUrl // Trả về link PayOS cho FE
     });
   } catch (error: any) {
     console.error('Create Order Error:', error);

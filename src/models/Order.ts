@@ -26,6 +26,7 @@ export interface IOrder extends Document {
   paymentStatus: 'PENDING' | 'DEPOSITED' | 'COMPLETED';
   paymentMethod: 'QR_CODE' | 'COD';
   orderCode: string;
+  paymentLinkId?: string;
   paidAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -69,6 +70,7 @@ const OrderSchema: Schema = new Schema(
       default: 'QR_CODE'
     },
     orderCode: { type: String, unique: true, index: true },
+    paymentLinkId: { type: String },
     paidAt: { type: Date }
   },
   {

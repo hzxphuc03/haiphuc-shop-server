@@ -1,89 +1,66 @@
 import type { Request, Response } from 'express';
 import Order from '../models/Order.js';
-import { config } from '../config/index.js';
+import payos from '../utils/payos.js';
+import fs from 'fs';
+import path from 'path';
 
 /**
- * Xử lý Webhook từ Casso/SePay
- * Luồng: Nhận data -> Parse mã đơn -> Đối soát tiền -> Cập nhật trạng thái
+ * Xử lý Webhook từ PayOS (Mới)
+ * Luồng: Nhận data -> Xác thực chữ ký -> Cập nhật trạng thái
  */
 export const handlePaymentWebhook = async (req: Request, res: Response) => {
+  const logFilePath = path.join(process.cwd(), 'webhook-debug.log');
+
   try {
-    // 1. Bảo mật: Kiểm tra Secure-Token
-    const secureToken = req.headers['secure-token'];
-    
-    // LOG MẠNH ĐỂ SOI DATA THỰC TẾ TỪ CASSO
-    console.log('-------------------------------------------');
-    console.log('🚀 [WEBHOOK] INCOMING REQUEST AT:', new Date().toISOString());
-    console.log('📦 BODY:', JSON.stringify(req.body, null, 2));
-    console.log('🔑 HEADERS:', JSON.stringify(req.headers, null, 2));
-    console.log('-------------------------------------------');
+    // GHI LOG VÀO FILE ĐỂ CHECK TRÊN PRODUCTION
+    const logData = `
+-------------------------------------------
+🚀 [PAYOS WEBHOOK] INCOMING AT: ${new Date().toISOString()}
+📦 BODY: ${JSON.stringify(req.body, null, 2)}
+-------------------------------------------
+`;
+    fs.appendFileSync(logFilePath, logData);
 
-    if (secureToken !== config.payment.webhookToken) {
-       console.error('❌ Webhook Token không khớp!');
-       return res.status(401).json({ error: 1, message: 'Token invalid' });
-    }
+    const webhookData = req.body;
 
-    const { data } = req.body; 
-    if (!data || !Array.isArray(data)) {
-      return res.status(200).json({ error: 0, message: 'Data empty or not array' });
-    }
+    // 1. Xác thực webhook từ PayOS (Nếu là test hoặc chưa cài checksum key thì có thể skip bước này)
+    // Nhưng trên Prod BẮT BUỘC phải dùng verifyPaymentWebhookData
+    try {
+        const verifiedData = await payos.webhooks.verify(webhookData);
+        console.log('✅ Webhook Verified:', verifiedData);
 
-    const results = [];
+        // data.orderCode từ PayOS trả về là mã đơn hàng (số) mà mình đã gửi lên
+        // Lưu ý: PayOS orderCode phải là kiểu Number
+        const { orderCode, code } = verifiedData;
 
-    for (const transaction of data) {
-      const description = transaction.description || '';
-      const amount = transaction.amount || 0;
+        if (code === '00') {
+            // Tìm đơn hàng trong DB theo paymentLinkId (Mã số mà mình gửi sang PayOS)
+            const order = await Order.findOne({ paymentLinkId: orderCode.toString() });
 
-      console.log(`🔍 Processing: "${description}" | Amount: ${amount}`);
-
-      // 2. RegEx siêu linh hoạt: Tìm HP/HPSHOP theo sau là mã 6-10 ký tự
-      // Bắt được: "HP123456", "HP 123456", "Thanh toan HP 123456", v.v.
-      const match = description.match(/(?:HP|HPSHOP|HAIPHUC)\s*([A-Z0-9]{6,10})/i);
-      
-      if (match) {
-        const orderCode = match[1].toUpperCase();
-        console.log(`🎯 Found Order Code: ${orderCode}`);
-        
-        // 3. Tìm đơn hàng trong DB
-        const order = await Order.findOne({ orderCode });
-
-        if (order) {
-          const requiredAmount = order.depositAmount;
-          console.log(`📊 DB Match: ${order._id} | Required: ${requiredAmount}`);
-
-          if (amount >= requiredAmount) {
-            // 4. Cập nhật trạng thái đơn hàng
-            order.paymentStatus = 'DEPOSITED';
-            order.status = 'DEPOSITED';
-            // @ts-ignore
-            order.paidAt = new Date(); 
-            
-            await order.save();
-            console.log(`✅ Order ${orderCode} UPDATED SUCCESS!`);
-            results.push({ orderCode, status: 'SUCCESS' });
-          } else {
-            console.warn(`⚠️ Amount mismatch: Got ${amount}, Need ${requiredAmount}`);
-            results.push({ orderCode, status: 'PARTIAL' });
-          }
-        } else {
-          console.warn(`❌ No order found in DB with code: ${orderCode}`);
-          results.push({ orderCode, status: 'NOT_FOUND' });
+            if (order) {
+                order.paymentStatus = 'DEPOSITED';
+                order.status = 'DEPOSITED';
+                // @ts-ignore
+                order.paidAt = new Date();
+                await order.save();
+                
+                const successMsg = `✅ Order ${orderCode} PAID SUCCESS!\n`;
+                fs.appendFileSync(logFilePath, successMsg);
+            } else {
+                fs.appendFileSync(logFilePath, `❌ No order found for PayOS code: ${orderCode}\n`);
+            }
         }
-      } else {
-        console.log(`ℹ️ Ignored: No HP pattern found in "${description}"`);
-        results.push({ description, status: 'IGNORED' });
-      }
+    } catch (verifyError: any) {
+        fs.appendFileSync(logFilePath, `⚠️ Webhook Verify Failed: ${verifyError.message}\n`);
+        // Vẫn trả về 200 để PayOS không gửi lại nếu là lỗi do dev/config
     }
 
-    // PHẢI TRẢ VỀ FORMAT NÀY ĐỂ CASSO/SEPAY BIẾT LÀ OK
-    res.status(200).json({
-      error: 0,
-      message: "Ok",
-      results
-    });
+    // PayOS yêu cầu trả về HTTP 200
+    res.status(200).json({ error: 0, message: "Ok" });
 
   } catch (error: any) {
-    console.error('Webhook Error:', error);
+    const errorMsg = `🔥 Webhook Error: ${error.message}\n`;
+    fs.appendFileSync(logFilePath, errorMsg);
     res.status(500).json({ error: error.message });
   }
 };
